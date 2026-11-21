@@ -1,0 +1,1192 @@
+function overlay(alpha = 0.6) { ctx.fillStyle = `rgba(8,5,12,${alpha})`; ctx.fillRect(0, 0, W, H); }
+
+let cardRects = [], levelRerollRect = null, levelBanRect = null;
+function drawLevelUp() {
+  overlay(0.78);
+  const t = performance.now() / 1000;
+  const isPortrait = H > W;
+  const isCompactH = H <= 540;
+  const s = clamp(Math.min(W / 1280, H / 720), 0.75, 1.4);
+  cardRects = [];
+
+  const titleY = Math.round(isPortrait ? 28 : (isCompactH ? 20 : 34) * s);
+  txt('✦ BÊNÇÃO ANCESTRAL ✦', W / 2, titleY, Math.round(isPortrait ? 15 : 20 * s), MED.goldLight);
+  txt(gamepadInfo.connected ? 'Escolha a dádiva sagrada [D-Pad / A / X, Y, B]' : 'Escolha a dádiva dos deuses para fortalecer seu campeão [1, 2, 3]', W / 2, titleY + Math.round(18 * s), Math.round(7.5 * s), MED.parch);
+
+  const gap = Math.round(16 * s);
+  const cw = Math.round(clamp((W - 60 - gap * 2) / 3, 200, 270));
+  const ch = Math.round(clamp(H - titleY - Math.round(56 * s), 220, 360));
+  const x0 = Math.round(W / 2 - (cw * 3 + gap * 2) / 2);
+  const y0 = Math.round(titleY + 30 * s);
+
+  levelChoices.forEach((u, i) => {
+    let x, y, curW = cw, curH = ch;
+    if (isPortrait) {
+      curW = Math.round(Math.min(380, W - 28));
+      curH = Math.round(clamp((H - y0 - 24) / 3, 90, 115));
+      x = Math.round(W / 2 - curW / 2);
+      y = Math.round(y0 + i * (curH + gap / 2));
+    } else {
+      x = Math.round(x0 + i * (cw + gap));
+      y = y0;
+    }
+
+    if (mouse.moved) {
+      const hov = inRect(mouse.x, mouse.y, { x, y, w: curW, h: curH });
+      if (hov) levelSel = i;
+    }
+    const sel = levelSel === i;
+    const lift = sel ? -6 : 0;
+
+    // Cartas Arcanas em Pergaminho com Moldura de Ferro Forjado
+    medPanel(x, y + lift, curW, curH, sel ? 'parch' : 'wood');
+
+    if (sel) {
+      ctx.strokeStyle = MED.goldLight;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y + lift, curW, curH);
+    }
+
+    const lvl = ups[u.id] || 0;
+    const isLegendary = (lvl >= 4);
+    const isEpic = (lvl >= 2 || ['vortex', 'berserk', 'venom', 'ricochet'].includes(u.id));
+    const isRare = (lvl >= 1);
+    const rarityName = isLegendary ? '★ LENDÁRIO ★' : isEpic ? '◆ ÉPICO ◆' : isRare ? '▲ RARO ▲' : '● COMUM ●';
+    const rarityCol = isLegendary ? MED.goldLight : isEpic ? '#d465ff' : isRare ? '#4fe3ff' : MED.ironLight;
+
+    if (isPortrait) {
+      const iconSz = Math.round(curH - 24);
+      const iconImg = IMG['i_' + u.icon];
+      if (iconImg) ctx.drawImage(iconImg, x + 12, y + lift + 12, iconSz, iconSz);
+
+      const textX = x + iconSz + 24;
+      txt(rarityName, textX, y + lift + 18, 6.5, rarityCol, 'left');
+      txt(u.name.toUpperCase(), textX, y + lift + 34, 9, sel ? '#ffffff' : MED.goldLight, 'left');
+      txt(lvl ? 'NV ' + toRoman(lvl + 1) : '✦ NOVO ✦', x + curW - 14, y + lift + 20, 7.5, lvl ? MED.parch : MED.leaf, 'right');
+
+      const dLines = wrap(u.desc(lvl), curW - iconSz - 36, 6.8);
+      dLines.slice(0, 2).forEach((l, j) => {
+        txt(l, textX, y + lift + 50 + j * 12, 6.8, MED.parch, 'left');
+      });
+
+      txt(sel ? '✓ ESCOLHER' : '[' + (i + 1) + ']', x + curW - 14, y + lift + curH - 10, 7.5, sel ? MED.goldLight : MED.parchDark, 'right');
+
+    } else {
+      txt(rarityName, x + curW / 2, y + lift + Math.round(18 * s), Math.round(7.5 * s), rarityCol);
+      txt(lvl ? 'NV ' + toRoman(lvl + 1) : '✦ NOVO ✦', x + curW / 2, y + lift + Math.round(32 * s), Math.round(8 * s), lvl ? (sel ? MED.parchInk : MED.parch) : MED.leaf);
+
+      const iconSz = Math.round(clamp(48 * s, 40, 56));
+      const iconX = Math.round(x + curW / 2 - iconSz / 2);
+      const iconY = Math.round(y + lift + 38 * s);
+
+      ctx.fillStyle = MED.ink;
+      ctx.beginPath();
+      ctx.ellipse(iconX + iconSz / 2, iconY + iconSz / 2, iconSz * 0.65, iconSz * 0.65, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = sel ? MED.gold : MED.iron;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      const iconImg = IMG['i_' + u.icon];
+      if (iconImg) ctx.drawImage(iconImg, iconX, iconY, iconSz, iconSz);
+
+      const nameLines = wrap(u.name.toUpperCase(), curW - 20, Math.round(9.5 * s));
+      const nameY = iconY + iconSz + Math.round(16 * s);
+      nameLines.forEach((l, j) => {
+        if (sel) {
+          inkTxt(l, x + curW / 2, nameY + j * Math.round(13 * s), Math.round(9.5 * s), '#8c2d08');
+        } else {
+          txt(l, x + curW / 2, nameY + j * Math.round(13 * s), Math.round(9.5 * s), MED.goldLight);
+        }
+      });
+
+      const divY = nameY + nameLines.length * Math.round(13 * s) + 4;
+      ctx.fillStyle = sel ? 'rgba(120, 80, 30, 0.3)' : 'rgba(217, 164, 65, 0.2)';
+      ctx.fillRect(x + 16, divY, curW - 32, 1);
+
+      const descY = divY + Math.round(12 * s);
+      const dLines = wrap(u.desc(lvl), curW - 24, Math.round(7.2 * s));
+      dLines.slice(0, 3).forEach((l, j) => {
+        if (sel) {
+          inkTxt(l, x + curW / 2, descY + j * Math.round(12 * s), Math.round(7.2 * s), MED.parchInk);
+        } else {
+          txt(l, x + curW / 2, descY + j * Math.round(12 * s), Math.round(7.2 * s), MED.parch);
+        }
+      });
+
+      const directBtn = i === 0 ? '[X]' : i === 1 ? '[Y]' : '[B]';
+      const promptTxt = gamepadInfo.connected ? (sel ? '✓ ESCOLHER [A]' : directBtn) : (sel ? '✓ ESCOLHER' : '[' + (i + 1) + '] SELECIONAR');
+      const footerY = y + lift + curH - Math.round(12 * s);
+      txt(promptTxt, x + curW / 2, footerY, Math.round(8 * s), sel ? (sel && !isPortrait ? '#8c2d08' : MED.goldLight) : MED.parchDark);
+    }
+
+    cardRects.push({ x, y, w: curW, h: curH, index: i });
+  });
+
+  const rCost = getRerollCost();
+  const rw = Math.round(230 * s), rh = Math.round(32 * s);
+  const rx = Math.round(W / 2 - rw / 2), ry = Math.round(y0 + ch + 14 * s);
+  if (ry + rh < H - 8) {
+    const rHov = inRect(mouse.x, mouse.y, { x: rx, y: ry, w: rw, h: rh });
+    const canReroll = coins >= rCost;
+    medPanel(rx, ry, rw, rh, rHov && canReroll ? 'parch' : 'leather');
+    const rLabel = rCost === 0 ? '🎲 [R] REROLL GRÁTIS' : '🎲 [R] REROLL (' + rCost + ' OURO)';
+    txt(rLabel, rx + rw / 2, ry + Math.round(21 * s), Math.round(8.2 * s), canReroll ? (rHov ? MED.parchInk : MED.goldLight) : '#777');
+    levelRerollRect = { x: rx, y: ry, w: rw, h: rh };
+    if (bansLeft > 0) {
+      const bx = rx + rw + Math.round(12 * s), bw = Math.round(165 * s);
+      const bHov = inRect(mouse.x, mouse.y, { x: bx, y: ry, w: bw, h: rh });
+      medPanel(bx, ry, bw, rh, bHov ? 'wood' : 'leather');
+      txt('🚫 [X] BANIR (' + bansLeft + ')', bx + bw / 2, ry + Math.round(21 * s), Math.round(8 * s), '#ff7a9c');
+      levelBanRect = { x: bx, y: ry, w: bw, h: rh };
+    } else levelBanRect = null;
+  } else {
+    levelRerollRect = null; levelBanRect = null;
+  }
+}
+
+let shopRects = [], shopExitRect = null;
+function drawShop() {
+  overlay(0.80);
+  const isPortrait = H > W;
+  const s = clamp(Math.min(W / 1280, H / 720), 0.72, 1.35);
+  shopRects = [];
+
+  const titleY = Math.round(isPortrait ? 22 : 24 * s);
+  txt('✦ BAZAR DO MERCADOR ERRANTE ✦', W / 2, titleY, Math.round(isPortrait ? 14 : 18 * s), MED.goldLight);
+  txt(gamepadInfo.connected ? 'Troque seu ouro por relíquias ancestrais [D-Pad / A / START]' : 'Troque seu ouro por relíquias e poções mágicas [Clique ou 1-9]', W / 2, titleY + Math.round(16 * s), Math.round(7.2 * s), MED.parch);
+  txt('🪙 SEU TESOURO: ' + coins + ' MOEDAS DE OURO', W / 2, titleY + Math.round(30 * s), Math.round(8.5 * s), MED.gold);
+
+  const y0 = Math.round(titleY + 40 * s);
+  const cols = isPortrait ? 3 : 5;
+  const rows = Math.ceil(SHOP_ITEMS.length / cols);
+  const gapX = Math.round(10 * s);
+  const gapY = Math.round(10 * s);
+  const availH = H - y0 - Math.round(58 * s);
+  const cw = Math.round(clamp((W - 44 - gapX * (cols - 1)) / cols, 110, 210));
+  const ch = Math.round(clamp((availH - gapY * (rows - 1)) / rows, 118, 210));
+
+  SHOP_ITEMS.forEach((it, i) => {
+    const row = Math.floor(i / cols);
+    const col = i % cols;
+    const itemsInRow = row === rows - 1 ? SHOP_ITEMS.length - row * cols : cols;
+    const rowW = itemsInRow * cw + (itemsInRow - 1) * gapX;
+    const rowX0 = Math.round(W / 2 - rowW / 2);
+    const x = Math.round(rowX0 + col * (cw + gapX));
+    const y = Math.round(y0 + row * (ch + gapY));
+
+    if (mouse.moved) {
+      const hov = inRect(mouse.x, mouse.y, { x, y, w: cw, h: ch });
+      if (hov) shopSel = i;
+    }
+    const sel = shopSel === i;
+    const lift = sel ? -4 : 0;
+    const canAfford = coins >= it.cost;
+
+    medPanel(x, y + lift, cw, ch, sel ? 'parch' : 'wood');
+    if (sel) {
+      ctx.strokeStyle = MED.goldLight;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y + lift, cw, ch);
+    }
+
+    const iconSz = Math.round(clamp(ch * 0.24, 24, 40));
+    const iconX = Math.round(x + cw / 2 - iconSz / 2);
+    const iconY = Math.round(y + lift + 10 * s);
+
+    ctx.fillStyle = MED.ink;
+    ctx.beginPath();
+    ctx.ellipse(iconX + iconSz / 2, iconY + iconSz / 2, iconSz * 0.62, iconSz * 0.62, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = canAfford ? MED.gold : MED.iron;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    const im = IMG['i_' + it.icon];
+    if (im) ctx.drawImage(im, iconX, iconY, iconSz, iconSz);
+
+    const nameFs = Math.round(clamp(ch * 0.048, 6.8, 8.2));
+    const nameLines = wrap(it.name.toUpperCase(), cw - 12, nameFs);
+    const nameY = iconY + iconSz + Math.round(11 * s);
+    nameLines.slice(0, 1).forEach((l, j) => {
+      if (sel) inkTxt(l, x + cw / 2, nameY + j * Math.round(10 * s), nameFs, '#8c2d08');
+      else txt(l, x + cw / 2, nameY + j * Math.round(10 * s), nameFs, MED.goldLight);
+    });
+
+    const costY = nameY + Math.round(12 * s);
+    const costTxt = '🪙 ' + it.cost + ' OURO';
+    const costFs = Math.round(clamp(ch * 0.045, 6.5, 7.8));
+    if (sel) inkTxt(costTxt, x + cw / 2, costY, costFs, canAfford ? '#1a6b22' : MED.blood);
+    else txt(costTxt, x + cw / 2, costY, costFs, canAfford ? MED.leaf : '#ff6b6b');
+
+    const descY = costY + Math.round(11 * s);
+    const descFs = Math.round(clamp(ch * 0.038, 5.8, 6.6));
+    const dLines = wrap(it.desc, cw - 14, descFs);
+    const maxDescLines = ch >= 150 ? 2 : 1;
+    dLines.slice(0, maxDescLines).forEach((l, j) => {
+      if (sel) inkTxt(l, x + cw / 2, descY + j * Math.round(9.5 * s), descFs, MED.parchInk);
+      else txt(l, x + cw / 2, descY + j * Math.round(9.5 * s), descFs, MED.parch);
+    });
+
+    const btnPrompt = canAfford ? (sel ? '✓ COMPRAR' : '[' + (i + 1) + '] COMPRAR') : 'SEM OURO';
+    const footerY = y + lift + ch - Math.round(8 * s);
+    txt(btnPrompt, x + cw / 2, footerY, Math.round(clamp(ch * 0.042, 6.2, 7.2)), canAfford ? (sel ? '#8c2d08' : MED.leaf) : MED.parchDark);
+
+    shopRects.push({ x, y, w: cw, h: ch, index: i });
+  });
+
+  const bw = Math.round(clamp(360 * s, 250, 420));
+  const bh = Math.round(clamp(36 * s, 30, 42));
+  const bx = Math.round(W / 2 - bw / 2);
+  const gridBottom = y0 + rows * ch + (rows - 1) * gapY;
+  const by = Math.min(H - bh - Math.round(8 * s), gridBottom + Math.round(10 * s));
+  const bsel = shopSel === SHOP_ITEMS.length;
+
+  medPanel(bx, by, bw, bh, 'leather');
+  if (bsel) {
+    ctx.strokeStyle = MED.goldLight;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx, by, bw, bh);
+  }
+  txt(gamepadInfo.connected ? '⚔ CONTINUAR BATALHA [START / B / A] ⚔' : '⚔ CONTINUAR BATALHA [ENTER] ⚔', W / 2, by + Math.round(bh * 0.62), Math.round(9 * s), bsel ? '#ffffff' : MED.goldLight);
+  if (shopToast && performance.now() < shopToast.until) {
+    const tw = Math.round(clamp(440 * s, 260, 520)), th = Math.round(34 * s);
+    const tx = Math.round(W / 2 - tw / 2), ty = Math.round(H * 0.5 - th / 2);
+    medPanel(tx, ty, tw, th, 'leather');
+    txt(shopToast.txt, W / 2, ty + Math.round(th * 0.64), Math.round(9 * s), shopToast.col);
+  }
+  shopExitRect = { x: bx, y: by, w: bw, h: bh };
+}
+
+// =====================================================================
+//  MENU DE SELEÇÃO DE PERSONAGENS
+// =====================================================================
+let charCardRects = [], charPlayRect = null, charBackRect = null;
+let charPrevRect = null, charNextRect = null, charTabRects = [];
+let charCarouselAngle = 0;
+let charCarouselInited = false;
+let charCarouselPop = 0;
+let charLastTime = 0;
+
+function drawPedestal3D(x, y, rx, ry, h, depth, isSelected, themeColor, now) {
+  ctx.save();
+  const sc = 0.70 + depth * 0.55;
+  const erx = rx * sc, ery = ry * sc, eh = h * sc;
+
+  // 1. Sombra projetada do pedestal no solo do templo
+  ctx.fillStyle = 'rgba(6, 4, 3, 0.65)';
+  ctx.beginPath();
+  ctx.ellipse(x, y + eh + 6, erx * 1.2, ery * 1.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 2. Coluna / Cilindro de pedra entalhada
+  const colGrad = ctx.createLinearGradient(x - erx, y, x + erx, y);
+  colGrad.addColorStop(0, '#100a07');
+  colGrad.addColorStop(0.3, isSelected ? '#2a1a11' : '#1d120c');
+  colGrad.addColorStop(0.7, isSelected ? '#3a2418' : '#271910');
+  colGrad.addColorStop(1, '#0e0906');
+  ctx.fillStyle = colGrad;
+  ctx.beginPath();
+  ctx.ellipse(x, y + eh, erx, ery, 0, 0, Math.PI);
+  ctx.lineTo(x - erx, y);
+  ctx.ellipse(x, y, erx, ery, 0, Math.PI, 0, true);
+  ctx.lineTo(x + erx, y + eh);
+  ctx.closePath();
+  ctx.fill();
+
+  // Ranhuras rúnicas verticais na pedra
+  ctx.strokeStyle = isSelected ? 'rgba(217, 164, 65, 0.4)' : 'rgba(30, 20, 15, 0.7)';
+  ctx.lineWidth = 1;
+  [-0.6, -0.25, 0.25, 0.6].forEach(offset => {
+    ctx.beginPath();
+    ctx.moveTo(x + erx * offset, y + ery * 0.8);
+    ctx.lineTo(x + erx * offset, y + eh - ery * 0.3);
+    ctx.stroke();
+  });
+
+  // Contorno da coluna
+  ctx.strokeStyle = MED.ink;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // 3. Topo do Pedestal (Elipse de Pedra Rúnica)
+  ctx.fillStyle = isSelected ? '#3a2214' : '#22150e';
+  ctx.beginPath();
+  ctx.ellipse(x, y, erx, ery, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = isSelected ? MED.gold : MED.iron;
+  ctx.lineWidth = isSelected ? 2 : 1.2;
+  ctx.stroke();
+
+  // 4. Círculo Mágico Rúnico Gravado no Topo
+  const tSec = now / 1000;
+  ctx.strokeStyle = isSelected ? themeColor : 'rgba(154, 160, 168, 0.35)';
+  ctx.lineWidth = isSelected ? 1.8 : 1;
+  ctx.beginPath();
+  ctx.ellipse(x, y, erx * 0.72, ery * 0.72, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Marcadores dos 4 pontos cardeais rúnicos (estrelas de 4 pontas)
+  for (let a = 0; a < Math.PI * 2; a += Math.PI / 2) {
+    const rot = isSelected ? a + tSec * 0.5 : a;
+    const rpx = x + Math.cos(rot) * (erx * 0.72);
+    const rpy = y + Math.sin(rot) * (ery * 0.72);
+    ctx.fillStyle = isSelected ? MED.goldLight : MED.ironLight;
+    ctx.fillRect(rpx - 1.5, rpy - 1.5, 3, 3);
+  }
+
+  // 5. Se selecionado, desenha feixe de luz mística e partículas ascendentes
+  if (isSelected) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const bGrad = ctx.createLinearGradient(x, y, x, y - 120 * sc);
+    const auraCol = themeColor === '#ffd23f' ? 'rgba(255, 210, 63,' : (themeColor === '#4fe3ff' ? 'rgba(79, 227, 255,' : 'rgba(255, 122, 41,');
+    bGrad.addColorStop(0, auraCol + ' 0.28)');
+    bGrad.addColorStop(0.5, auraCol + ' 0.12)');
+    bGrad.addColorStop(1, auraCol + ' 0)');
+    ctx.fillStyle = bGrad;
+    ctx.beginPath();
+    ctx.moveTo(x - erx * 0.85, y);
+    ctx.lineTo(x + erx * 0.85, y);
+    ctx.lineTo(x + erx * 0.50, y - 120 * sc);
+    ctx.lineTo(x - erx * 0.50, y - 120 * sc);
+    ctx.closePath();
+    ctx.fill();
+
+    // Partículas místicas flutuantes saindo do altar
+    for (let p = 0; p < 5; p++) {
+      const pSeed = (tSec * 0.7 + p * 1.3) % 1;
+      const px = x + Math.sin(tSec * 2 + p * 2.1) * (erx * 0.5);
+      const py = y - pSeed * 100 * sc;
+      const pAlpha = Math.sin(pSeed * Math.PI) * 0.7;
+      ctx.fillStyle = auraCol + ` ${pAlpha})`;
+      ctx.fillRect(px - 1.5, py - 1.5, 3, 3);
+    }
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+function drawCharacterSelect() {
+  overlay(0.85);
+  const now = performance.now();
+  const t = now / 1000;
+  const dt = charLastTime ? clamp((now - charLastTime) / 1000, 0, 0.05) : 0.016;
+  charLastTime = now;
+
+  const isPortrait = H > W;
+  const isCompactH = H <= 540;
+  const s = clamp(Math.min(W / 1280, H / 720), 0.75, 1.4);
+
+  // Inicialização suave da roleta
+  if (!charCarouselInited) {
+    charCarouselAngle = selectedCharIndex * (Math.PI * 2 / CHARACTERS.length);
+    charCarouselInited = true;
+  }
+
+  // Interpolação angular fluida da Roleta 3D
+  const targetAngle = selectedCharIndex * (Math.PI * 2 / CHARACTERS.length);
+  let dAngle = targetAngle - charCarouselAngle;
+  while (dAngle < -Math.PI) dAngle += Math.PI * 2;
+  while (dAngle > Math.PI) dAngle -= Math.PI * 2;
+  charCarouselAngle += dAngle * (1 - Math.exp(-11 * dt));
+
+  charCardRects = [];
+  charTabRects = [];
+  charPrevRect = null;
+  charNextRect = null;
+
+  // 1. TÍTULO HEROICO & ILUMINAÇÃO DE SANTUÁRIO
+  const titleY = Math.round(isPortrait ? 28 : (isCompactH ? 20 : 34) * s);
+  txt('⚔ ESCOLHA SEU CAMPEÃO ⚔', W / 2, titleY, Math.round(isPortrait ? 15 : 19 * s), MED.goldLight);
+  const curChTrack = CHARACTERS[selectedCharIndex];
+  const isPlayingMusic = activeCharMusic && !activeCharMusic.paused && activeCharId === curChTrack.id;
+  const musicSymbol = isPlayingMusic ? (Math.floor(time * 3) % 2 === 0 ? '♫' : '♪') : '♫';
+  const trackLabel = curChTrack ? `${musicSymbol} Trilha: ${curChTrack.name}.mp3` : '';
+  txt('Gire a roleta ancestral  •  ' + trackLabel, W / 2, titleY + Math.round(18 * s), Math.round(7.5 * s), isPlayingMusic ? MED.goldLight : MED.parch);
+
+  // 2. PARÂMETROS DA ÓRBITA CILÍNDRICA 3D (ROLETA)
+  const centerY = isPortrait ? H * 0.28 : (isCompactH ? H * 0.33 : H * 0.34);
+  const radiusX = isPortrait ? clamp(W * 0.34, 110, 160) : clamp(W * 0.28, 180, 320);
+  const radiusY = radiusX * 0.26;
+
+  // Ordenação Z (profundidade) para desenhar os de trás primeiro
+  const renderList = CHARACTERS.map((chData, i) => {
+    let relAngle = (i * (Math.PI * 2 / CHARACTERS.length)) - charCarouselAngle;
+    while (relAngle < -Math.PI) relAngle += Math.PI * 2;
+    while (relAngle > Math.PI) relAngle -= Math.PI * 2;
+
+    const px = W / 2 + Math.sin(relAngle) * radiusX;
+    const py = centerY + Math.cos(relAngle) * radiusY;
+    const depth = (Math.cos(relAngle) + 1) / 2; // 0 no fundo, 1 na frente
+    const isSelected = selectedCharIndex === i;
+    const themeColor = chData.weaponType === 'saber' ? '#ffd23f' : (chData.weaponType === 'star' ? '#4fe3ff' : '#ff7a29');
+
+    return { index: i, chData, px, py, depth, isSelected, themeColor };
+  });
+
+  renderList.sort((a, b) => a.depth - b.depth);
+
+  // 3. RENDERIZAÇÃO DOS PEDESTAIS E PERSONAGENS NA ROLETA 3D
+  renderList.forEach(item => {
+    const { index, chData, px, py, depth, isSelected, themeColor } = item;
+    const sc = 0.70 + depth * 0.55;
+    const alpha = 0.42 + depth * 0.58;
+
+    // Pedestal de Pedra 3D
+    drawPedestal3D(px, py, 42 * s, 18 * s, 16 * s, depth, isSelected, themeColor, now);
+
+    // Sprite do Personagem
+    const previewWalk = isSelected && (Math.floor(t / 2.2) % 2 === 1);
+    const animArr = previewWalk ? chData.anim.walkDown : chData.anim.idle;
+    const fr = animArr[Math.floor(t * (previewWalk ? 11 : 7)) % animArr.length];
+
+    ctx.save();
+    // Efeito de levitação suave para o herói em foco
+    const bob = isSelected ? Math.sin(t * 4) * 3 * s : 0;
+    ctx.translate(px, py - 4 * sc + bob);
+    ctx.scale(sc, sc);
+
+    // Sombra do personagem sobre o pedestal
+    shadow(0, 0, 18, 6, 0.45 * alpha);
+
+    // Desenha o personagem
+    drawCharacterFrame(chData, fr, 0, 0, false, 0, { alpha });
+    ctx.restore();
+
+    // Nome sob os pedestais secundários (o selecionado tem destaque no pergaminho abaixo)
+    if (!isSelected) {
+      const nameY = py + Math.round(26 * sc * s);
+      const fs = Math.round(7.5 * sc * s);
+      txt(chData.name.toUpperCase(), px, nameY, fs, MED.parchDark);
+    }
+
+    // Registro de clique no pedestal / personagem lateral para trocar
+    const hitW = 90 * sc, hitH = 110 * sc;
+    charCardRects.push({
+      x: px - hitW / 2,
+      y: py - hitH + 20,
+      w: hitW,
+      h: hitH,
+      index
+    });
+  });
+
+  // 4. BOTÕES LATERAIS DE NAVEGAÇÃO DA ROLETA [ ◀ ] e [ ▶ ]
+  const arrowSz = Math.round(clamp(46 * s, 38, 54));
+  const arrowY = centerY - arrowSz / 2;
+  const leftX = Math.round(clamp(W / 2 - radiusX - arrowSz - 28 * s, 14, W * 0.16));
+  const rightX = Math.round(clamp(W / 2 + radiusX + 28 * s, W - arrowSz - 14, W * 0.84 - arrowSz));
+
+  const prevHov = inRect(mouse.x, mouse.y, { x: leftX, y: arrowY, w: arrowSz, h: arrowSz });
+  medPanel(leftX, arrowY, arrowSz, arrowSz, prevHov ? 'parch' : 'thin');
+  txt('◀', leftX + arrowSz / 2, arrowY + arrowSz / 2 + Math.round(5 * s), Math.round(15 * s), prevHov ? MED.parchInk : MED.goldLight);
+  txt(gamepadInfo.connected ? 'LB' : 'A', leftX + arrowSz / 2, arrowY + arrowSz + Math.round(11 * s), Math.round(6.5 * s), MED.parchDark);
+  charPrevRect = { x: leftX, y: arrowY, w: arrowSz, h: arrowSz };
+
+  const nextHov = inRect(mouse.x, mouse.y, { x: rightX, y: arrowY, w: arrowSz, h: arrowSz });
+  medPanel(rightX, arrowY, arrowSz, arrowSz, nextHov ? 'parch' : 'thin');
+  txt('▶', rightX + arrowSz / 2, arrowY + arrowSz / 2 + Math.round(5 * s), Math.round(15 * s), nextHov ? MED.parchInk : MED.goldLight);
+  txt(gamepadInfo.connected ? 'RB' : 'D', rightX + arrowSz / 2, arrowY + arrowSz + Math.round(11 * s), Math.round(6.5 * s), MED.parchDark);
+  charNextRect = { x: rightX, y: arrowY, w: arrowSz, h: arrowSz };
+
+  // 5. PERGAMINHO DE ATRIBUTOS DO LUTADOR EM FOCO
+  const curCh = CHARACTERS[selectedCharIndex];
+  const scrollW = Math.round(clamp(isPortrait ? W - 32 : (isCompactH ? 440 * s : 510 * s), 280, 560));
+  const scrollH = Math.round(clamp(isPortrait ? H * 0.36 : (isCompactH ? 120 * s : 148 * s), 110, 165));
+  const scrollX = Math.round(W / 2 - scrollW / 2);
+  const scrollY = Math.round(isPortrait ? centerY + radiusY + 40 : (isCompactH ? centerY + radiusY + 28 : centerY + radiusY + 48));
+
+  medPanel(scrollX, scrollY, scrollW, scrollH, 'parch');
+
+  // Cabeçalho do Lutador no Pergaminho (contraste aperfeiçoado)
+  const padS = Math.round(14 * s);
+  const titleColor = curCh.weaponType === 'saber' ? '#8c2d08' : (curCh.weaponType === 'star' ? '#18548c' : '#a34200');
+  inkTxt('✦ ' + curCh.name.toUpperCase() + ' ✦', scrollX + scrollW / 2, scrollY + Math.round(19 * s), Math.round(12.5 * s), titleColor);
+  inkTxt('« ' + curCh.title + ' »', scrollX + scrollW / 2, scrollY + Math.round(31 * s), Math.round(7.5 * s), '#5c3d1e');
+
+  // Linha divisória de tinta
+  ctx.fillStyle = 'rgba(120, 80, 30, 0.35)';
+  ctx.fillRect(scrollX + padS, scrollY + Math.round(36 * s), scrollW - padS * 2, 1);
+
+  // Ícones de Armas e Habilidades
+  const iconSz = Math.round(26 * s);
+  const infoY = scrollY + Math.round(44 * s);
+  let wIcon = hudImg('i_S_Dagger03');
+  if (curCh.weaponType === 'star') wIcon = hudImg('terraria_star') || hudImg('i_S_Light04');
+  else if (curCh.weaponType === 'orange') wIcon = hudImg('orange_ball') || hudImg('i_P_Red01');
+
+  if (wIcon) ctx.drawImage(wIcon, scrollX + padS + 4, infoY, iconSz, iconSz);
+
+  inkTxt('GOLPE: ' + curCh.attackName, scrollX + padS + iconSz + 10, infoY + Math.round(10 * s), Math.round(8 * s), MED.parchInk, 'left');
+  inkTxt('FÚRIA: ' + curCh.ultName, scrollX + padS + iconSz + 10, infoY + Math.round(22 * s), Math.round(7.5 * s), MED.blood, 'left');
+
+  // Barras de Atributos Rúnicas (Dano, Velocidade, Sobrevivência)
+  const statX = Math.round(scrollX + scrollW * 0.52);
+  const statW = Math.round(scrollW * 0.40);
+  const statH = Math.max(5, Math.round(6 * s));
+
+  // 1. Dano
+  inkTxt('DANO', statX, infoY + Math.round(7 * s), Math.round(6.5 * s), '#4a2c16', 'left');
+  medBar(statX + 40, infoY + 2, statW - 40, statH, curCh.dmgMod, 1.5, { col: MED.bloodLight, back: '#d2b47e' });
+
+  // 2. Velocidade
+  inkTxt('AGIL.', statX, infoY + Math.round(17 * s), Math.round(6.5 * s), '#4a2c16', 'left');
+  medBar(statX + 40, infoY + 12, statW - 40, statH, curCh.speedMod, 1.3, { col: MED.gold, back: '#d2b47e' });
+
+  // 3. Defesa
+  inkTxt('VIDA', statX, infoY + Math.round(27 * s), Math.round(6.5 * s), '#4a2c16', 'left');
+  medBar(statX + 40, infoY + 22, statW - 40, statH, curCh.hpMod, 8, { col: MED.leaf, back: '#d2b47e' });
+
+  // Descrição do Campeão escrita a tinta
+  const descY = infoY + Math.round(38 * s);
+  const dLines = wrap(curCh.desc, scrollW - padS * 2 - 12, Math.round(7.2 * s));
+  dLines.slice(0, 2).forEach((l, j) => {
+    inkTxt(l, scrollX + scrollW / 2, descY + j * Math.round(12 * s), Math.round(7.2 * s), MED.parchInk);
+  });
+
+  // 6. BOTÕES DO RODAPÉ: [ ← MENU ] e [ ⚔ ENTRAR NA ARENA ⚔ ]
+  const btnY = Math.min(H - Math.round(48 * s), scrollY + scrollH + Math.round(14 * s));
+  const btnH = Math.round(clamp(40 * s, 34, 46));
+
+  // Botão Voltar ao Menu
+  const backW = Math.round(clamp(115 * s, 95, 135));
+  const backX = Math.round(scrollX);
+  const backHov = inRect(mouse.x, mouse.y, { x: backX, y: btnY, w: backW, h: btnH });
+  medPanel(backX, btnY, backW, btnH, backHov ? 'parch' : 'thin');
+  txt('← MENU', backX + backW / 2, btnY + btnH / 2 + Math.round(4 * s), Math.round(8.5 * s), backHov ? MED.parchInk : MED.parch);
+  txt('[ESC]', backX + backW / 2, btnY + btnH + Math.round(10 * s), Math.round(6 * s), MED.parchDark);
+  charBackRect = { x: backX, y: btnY, w: backW, h: btnH };
+
+  // Botão Entrar na Arena
+  const playW = Math.round(scrollW - backW - 14 * s);
+  const playX = Math.round(backX + backW + 14 * s);
+  const playHov = inRect(mouse.x, mouse.y, { x: playX, y: btnY, w: playW, h: btnH });
+
+  medPanel(playX, btnY, playW, btnH, 'leather');
+  if (playHov) {
+    ctx.strokeStyle = MED.goldLight;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(playX, btnY, playW, btnH);
+  }
+
+  const playText = '⚔ ENTRAR NA ARENA ⚔';
+  txt(playText, playX + playW / 2, btnY + btnH / 2 + Math.round(5 * s), Math.round(10.5 * s), playHov ? '#ffffff' : MED.goldLight);
+  txt(gamepadInfo.connected ? '[A / RT CONFIRMAR]' : '[ENTER / ESPAÇO]', playX + playW / 2, btnY + btnH + Math.round(10 * s), Math.round(6 * s), MED.gold);
+  charPlayRect = { x: playX, y: btnY, w: playW, h: btnH };
+}
+
+function selectCharacter(index) {
+  selectedCharIndex = index;
+  localStorage.setItem('gabriel_char_index', selectedCharIndex);
+  if (typeof saveProfile === 'function') saveProfile();
+  SFX.select();
+  const cur = CHARACTERS[selectedCharIndex];
+  if (cur) playCharacterMusic(cur.id);
+}
+
+let isStartingGame = false;
+let gameStartAnimTime = 0;
+function startWithSelectedCharacter() {
+  if (isStartingGame) return;
+  isStartingGame = true;
+  gameStartAnimTime = performance.now();
+  stopCharacterMusic();
+  play('unsheathe', 0.6, 0);
+  if (typeof SFX !== 'undefined' && SFX.wave) SFX.wave();
+
+  const ov = document.getElementById('menu-overlay');
+  if (ov) {
+    ov.classList.add('is-starting');
+  }
+
+  setTimeout(() => {
+    reset();
+    state = 'play';
+    if (typeof playEventMusic === 'function' && waveEvent) {
+      playEventMusic(waveEvent);
+    } else {
+      startMusic();
+      music.volume = 0.3;
+    }
+    if (ov) {
+      ov.classList.remove('is-starting');
+      ov.classList.add('is-hidden');
+    }
+    isStartingGame = false;
+  }, 320);
+}
+
+// =====================================================================
+//  MENU PRINCIPAL
+// =====================================================================
+let menuPlayRect = null, menuCharRect = null, menuSoulRect = null, menuBestiaryRect = null, menuDiffRects = [];
+function easeOutCubic(x) { return 1 - Math.pow(1 - clamp(x, 0, 1), 3); }
+let bestiaryPage = 0, bestiaryPrevRect = null, bestiaryNextRect = null, bestiaryBackRect = null;
+
+function changeBestiaryPage(delta) {
+  const total = BESTIARY_ORDER.length;
+  bestiaryPage = (bestiaryPage + delta + total) % total;
+  if (typeof SFX !== 'undefined' && SFX.bookFlip) SFX.bookFlip(); else SFX.select();
+}
+
+function drawBestiaryMonsterSprite(key, cx, cy, maxBox) {
+  const d = MON[key];
+  if (!d) return;
+  const img = IMG['m_' + d.img] || IMG[d.img];
+  if (!img || !img.complete) return;
+  const t = performance.now() / 1000;
+  let col = 0, row = 0;
+  if (d.single) {
+    col = 0; row = 0;
+  } else if (['chaos_imp', 'void_spider', 'boss_void_overlord', 'boss_magma_colossus'].includes(key)) {
+    col = Math.floor(t * 6) % 4;
+  } else if (['twilight_lich', 'aether_slider', 'carminite_ghast'].includes(key)) {
+    col = Math.floor(t * 8) % 4;
+  } else {
+    col = Math.floor(t * (key === 'bat' || key === 'bee' ? 10 : 6)) % 3;
+  }
+  const fitScale = Math.min((maxBox * 0.82) / d.fw, (maxBox * 0.82) / d.fh);
+  const dw = Math.round(d.fw * fitScale);
+  const dh = Math.round(d.fh * fitScale);
+  const bob = d.fly ? Math.sin(t * 3.5) * 5 : 0;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = 'rgba(20, 12, 8, 0.25)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + dh * 0.42, dw * 0.38, Math.max(5, dh * 0.1), 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.drawImage(img, col * d.fw, row * d.fh, d.fw, d.fh, Math.round(cx - dw / 2), Math.round(cy - dh / 2 + bob), dw, dh);
+  ctx.restore();
+}
+
+function drawBestiary() {
+  overlay(0.84);
+  const s = clamp(Math.min(W / 1280, H / 720), 0.72, 1.35);
+  const key = BESTIARY_ORDER[bestiaryPage] || BESTIARY_ORDER[0];
+  const d = MON[key];
+  const info = BESTIARY_LORE[key] || { name: key.toUpperCase(), title: 'Criatura', desc: '', lore: '' };
+  const killsCount = bestiaryKills[key] || 0;
+
+  // Animação suave de abertura (design-motion-principles)
+  const openP = panelOpenAt ? easeOutCubic((performance.now() - panelOpenAt) / 220) : 1;
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.scale(0.92 + 0.08 * openP, 0.92 + 0.08 * openP);
+  ctx.translate(-W / 2, -H / 2);
+  // Dimensões do Livro Aberto
+  const bookW = Math.round(clamp(820 * s, 560, W - 44));
+  const bookH = Math.round(clamp(480 * s, 360, H - 96));
+  const bookX = Math.round(W / 2 - bookW / 2);
+  const bookY = Math.round(H / 2 - bookH / 2 - 14 * s);
+
+  // Capa de couro do livro + sombra
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(bookX - 6, bookY + 8, bookW + 16, bookH + 10);
+  medPanel(bookX - 10, bookY - 10, bookW + 20, bookH + 20, 'leather');
+
+  // Duas páginas de pergaminho lado a lado
+  const spineW = Math.round(14 * s);
+  const pageW = Math.round((bookW - spineW) / 2);
+  const pageH = bookH - Math.round(12 * s);
+  const leftX = bookX + Math.round(4 * s);
+  const rightX = leftX + pageW + spineW;
+  const pageY = bookY + Math.round(6 * s);
+
+  const drawPage = (px, py, pw, ph, isLeft) => {
+    ctx.fillStyle = MED.ink;
+    ctx.fillRect(px - 2, py - 2, pw + 4, ph + 4);
+    ctx.fillStyle = MED.parch;
+    ctx.fillRect(px, py, pw, ph);
+    ctx.fillStyle = MED.parchDark;
+    ctx.fillRect(px + 6, py + 6, pw - 12, 2);
+    ctx.fillRect(px + 6, py + ph - 8, pw - 12, 2);
+    // Sombra da dobra central
+    const gradX = isLeft ? px + pw - 22 : px;
+    const g = ctx.createLinearGradient(gradX, 0, gradX + 22, 0);
+    g.addColorStop(isLeft ? 0 : 1, 'rgba(60,35,18,0)');
+    g.addColorStop(isLeft ? 1 : 0, 'rgba(60,35,18,0.22)');
+    ctx.fillStyle = g;
+    ctx.fillRect(gradX, py, 22, ph);
+  };
+  drawPage(leftX, pageY, pageW, pageH, true);
+  drawPage(rightX, pageY, pageW, pageH, false);
+
+  // Lombada central + marcador de fita vermelha
+  ctx.fillStyle = '#2a160d';
+  ctx.fillRect(leftX + pageW, pageY - 4, spineW, pageH + 8);
+  ctx.fillStyle = MED.goldDark;
+  for (let sy = pageY + 24; sy < pageY + pageH - 20; sy += Math.round(46 * s)) {
+    ctx.fillRect(leftX + pageW + 2, sy, spineW - 4, 4);
+  }
+  // Marcador vermelho
+  const ribX = leftX + pageW + Math.round(spineW / 2) - 4;
+  ctx.fillStyle = '#9e1c24';
+  ctx.fillRect(ribX, pageY + pageH, 8, Math.round(22 * s));
+
+  // ---------- PÁGINA ESQUERDA: IMAGEM, NOME E ABATES ----------
+  const lcx = Math.round(leftX + pageW / 2);
+  const tagTxt = d.isBoss ? '★ CHEFE ANCESTRAL ★' : 'CRIATURA DA ARENA';
+  const tagCol = d.isBoss ? '#7a1c8c' : '#6e4726';
+  inkTxt(tagTxt, lcx, pageY + Math.round(28 * s), Math.round(8 * s), tagCol);
+  inkTxt(info.name.toUpperCase(), lcx, pageY + Math.round(54 * s), Math.round(13 * s), d.isBoss ? '#8c2d08' : MED.parchInk);
+  inkTxt('« ' + info.title + ' »', lcx, pageY + Math.round(74 * s), Math.round(8 * s), '#634328');
+
+  // Moldura rúnica da imagem do mob
+  const frameSz = Math.round(clamp(190 * s, 130, Math.min(pageW - 48, pageH - 175)));
+  const fx = Math.round(lcx - frameSz / 2);
+  const fy = Math.round(pageY + 92 * s);
+  ctx.fillStyle = '#241712';
+  ctx.fillRect(fx - 3, fy - 3, frameSz + 6, frameSz + 6);
+  ctx.fillStyle = d.isBoss ? '#301a28' : '#2c231c';
+  ctx.fillRect(fx, fy, frameSz, frameSz);
+  ctx.strokeStyle = d.isBoss ? MED.gold : MED.goldDark;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(fx + 3, fy + 3, frameSz - 6, frameSz - 6);
+
+  drawBestiaryMonsterSprite(key, lcx, fy + frameSz / 2, frameSz);
+
+  // Selo de Abates
+  const killBoxY = fy + frameSz + Math.round(16 * s);
+  const killBoxW = Math.round(pageW - 44 * s);
+  const killBoxH = Math.round(44 * s);
+  const killBoxX = Math.round(lcx - killBoxW / 2);
+  medPanel(killBoxX, killBoxY, killBoxW, killBoxH, 'wood');
+  txt('💀 VOCÊ ABATEU: ' + killsCount, lcx, killBoxY + Math.round(27 * s), Math.round(9.5 * s), killsCount > 0 ? '#7aff61' : '#c8b49e');
+
+  // ---------- PÁGINA DIREITA: ESTATÍSTICAS, DESCRIÇÃO E HISTÓRIA ----------
+  const rPad = Math.round(20 * s);
+  const rx = rightX + rPad;
+  const rw = pageW - rPad * 2;
+  let cy = pageY + Math.round(30 * s);
+
+  inkTxt('ESTATÍSTICAS DE COMBATE', rightX + pageW / 2, cy, Math.round(9.5 * s), '#8c2d08');
+  cy += Math.round(16 * s);
+
+  const statRows = [
+    ['♥ VIDA BASE', d.hp + ' HP', '#a82222'],
+    ['⚔ FORÇA (DANO)', d.dmg + (d.dmg === 0 ? ' (Foge)' : ' DANO'), '#7d3c0a'],
+    ['💨 VELOCIDADE', d.speed > 0 ? d.speed + ' px/s' : 'Imóvel', '#2b5876'],
+    ['★ RECOMPENSA', d.score + ' PTS / ' + d.xp + ' XP', '#7a5a08'],
+  ];
+  const rowH = Math.round(24 * s);
+  statRows.forEach(([lbl, val, col]) => {
+    ctx.fillStyle = 'rgba(110, 75, 42, 0.14)';
+    ctx.fillRect(rx, cy, rw, rowH - 3);
+    inkTxt(lbl, rx + 8, cy + Math.round(15 * s), Math.round(7.5 * s), '#4a2c16', 'left');
+    inkTxt(val, rx + rw - 8, cy + Math.round(15 * s), Math.round(7.8 * s), col, 'right');
+    cy += rowH;
+  });
+
+  cy += Math.round(14 * s);
+  inkTxt('COMPORTAMENTO EM ARENA', rx, cy, Math.round(8.2 * s), '#8c2d08', 'left');
+  cy += Math.round(15 * s);
+  const descSize = Math.round(7.4 * s);
+  const descLines = wrap(info.desc, rw - 4, descSize);
+  descLines.forEach(l => {
+    inkTxt(l, rx, cy, descSize, MED.parchInk, 'left');
+    cy += Math.round(13 * s);
+  });
+
+  cy += Math.round(12 * s);
+  ctx.fillStyle = MED.parchDark;
+  ctx.fillRect(rx, cy - 6, rw, 1);
+  cy += Math.round(10 * s);
+  inkTxt('HISTÓRIA & CRÔNICA', rx, cy, Math.round(8.2 * s), '#8c2d08', 'left');
+  cy += Math.round(15 * s);
+  const loreSize = Math.round(7.2 * s);
+  const loreLines = wrap(info.lore, rw - 4, loreSize);
+  loreLines.forEach(l => {
+    inkTxt(l, rx, cy, loreSize, '#52351e', 'left');
+    cy += Math.round(13 * s);
+  });
+
+  // ---------- CONTROLES DE PÁGINA NO RODAPÉ DO LIVRO ----------
+  const navY = bookY + bookH + Math.round(22 * s);
+  const navH = Math.round(34 * s);
+  const navW = Math.round(clamp(165 * s, 120, 195));
+  const closeW = Math.round(clamp(155 * s, 120, 180));
+
+  const pxRect = { x: Math.round(W / 2 - navW - 95 * s), y: navY, w: navW, h: navH };
+  const nxRect = { x: Math.round(W / 2 + 95 * s), y: navY, w: navW, h: navH };
+  const clRect = { x: Math.round(W - closeW - 22 * s), y: Math.round(20 * s), w: closeW, h: Math.round(32 * s) };
+
+  const pHov = inRect(mouse.x, mouse.y, pxRect);
+  const nHov = inRect(mouse.x, mouse.y, nxRect);
+  const cHov = inRect(mouse.x, mouse.y, clRect);
+
+  medPanel(pxRect.x, pxRect.y, pxRect.w, pxRect.h, pHov ? 'parch' : 'wood');
+  txt('◀ ANTERIOR [A/←]', pxRect.x + pxRect.w / 2, pxRect.y + Math.round(22 * s), Math.round(8 * s), pHov ? MED.parchInk : MED.goldLight);
+
+  txt('PÁG. ' + (bestiaryPage + 1) + ' / ' + BESTIARY_ORDER.length, W / 2, navY + Math.round(22 * s), Math.round(9.5 * s), MED.goldLight);
+
+  medPanel(nxRect.x, nxRect.y, nxRect.w, nxRect.h, nHov ? 'parch' : 'wood');
+  txt('PRÓXIMA [D/→] ▶', nxRect.x + nxRect.w / 2, nxRect.y + Math.round(22 * s), Math.round(8 * s), nHov ? MED.parchInk : MED.goldLight);
+
+  medPanel(clRect.x, clRect.y, clRect.w, clRect.h, cHov ? 'parch' : 'leather');
+  txt('✕ FECHAR [ESC]', clRect.x + clRect.w / 2, clRect.y + Math.round(21 * s), Math.round(8 * s), cHov ? MED.parchInk : MED.goldLight);
+
+  bestiaryPrevRect = pxRect;
+  bestiaryNextRect = nxRect;
+  bestiaryBackRect = clRect;
+  ctx.restore();
+}
+let soulRects = [], soulBackRect = null;
+const SOUL_DEFS = [
+  { id: 'vigor', name: 'Vigor Ancestral', max: 3, cost: l => 4 + l * 4, desc: l => '+2 HP inicial por nível (Atual: +' + (l * 2) + ' HP)' },
+  { id: 'fury', name: 'Fúria Eterna', max: 3, cost: l => 4 + l * 4, desc: l => '+15% Fúria e +10% Moedas por nível' },
+  { id: 'revive', name: 'Segunda Chance', max: 1, cost: () => 12, desc: () => 'Ressuscita 1x por partida com 50% HP e choque' },
+];
+function buySoulUpgrade(id) {
+  const def = SOUL_DEFS.find(d => d.id === id);
+  if (!def) return;
+  const cur = soulUps[id] || 0;
+  if (cur >= def.max) { SFX.shopNo(); return; }
+  const c = def.cost(cur);
+  if (soulEssences < c) { SFX.shopNo(); return; }
+  soulEssences -= c;
+  soulUps[id] = cur + 1;
+  localStorage.setItem('gabriel_essences', soulEssences);
+  localStorage.setItem('gabriel_soul_ups', JSON.stringify(soulUps));
+  if (typeof saveProfile === 'function') saveProfile();
+  SFX.bloodRite();
+}
+function drawSoulShrine() {
+  overlay(0.84);
+  const s = clamp(Math.min(W / 1280, H / 720), 0.75, 1.4);
+  soulRects = [];
+  txt('✦ SANTUÁRIO DAS ALMAS ✦', W / 2, Math.round(44 * s), Math.round(18 * s), '#c844ff');
+  txt('Essências Abissais disponíveis: ' + soulEssences + ' (Chefes dropam Essências)', W / 2, Math.round(68 * s), Math.round(8.5 * s), MED.goldLight);
+
+  const cw = Math.round(240 * s), ch = Math.round(210 * s), gap = Math.round(18 * s);
+  const x0 = Math.round(W / 2 - (cw * 3 + gap * 2) / 2);
+  const y0 = Math.round(H / 2 - ch / 2);
+  SOUL_DEFS.forEach((d, i) => {
+    const x = x0 + i * (cw + gap), y = y0;
+    const cur = soulUps[d.id] || 0;
+    const maxed = cur >= d.max;
+    const cost = d.cost(cur);
+    const hov = inRect(mouse.x, mouse.y, { x, y, w: cw, h: ch });
+    medPanel(x, y, cw, ch, hov && !maxed ? 'wood' : 'leather');
+    txt(d.name.toUpperCase(), x + cw / 2, y + Math.round(30 * s), Math.round(9.5 * s), MED.goldLight);
+    txt('NÍVEL ' + cur + ' / ' + d.max, x + cw / 2, y + Math.round(52 * s), Math.round(8 * s), '#c844ff');
+    const lines = wrap(d.desc(cur), cw - 28, Math.round(7.5 * s));
+    lines.forEach((l, j) => txt(l, x + cw / 2, y + Math.round(86 * s) + j * Math.round(14 * s), Math.round(7.5 * s), MED.parch));
+    const btnTxt = maxed ? '✓ MÁXIMO' : (soulEssences >= cost ? 'DESPERTAR (' + cost + ' ESS.)' : 'FALTA (' + cost + ' ESS.)');
+    txt(btnTxt, x + cw / 2, y + ch - Math.round(22 * s), Math.round(8 * s), maxed ? '#7aff61' : (soulEssences >= cost ? '#ffe08a' : '#888'));
+    soulRects.push({ x, y, w: cw, h: ch, id: d.id });
+  });
+  const bw = Math.round(200 * s), bh = Math.round(38 * s);
+  const bx = Math.round(W / 2 - bw / 2), by = Math.round(y0 + ch + 26 * s);
+  const bHov = inRect(mouse.x, mouse.y, { x: bx, y: by, w: bw, h: bh });
+  medPanel(bx, by, bw, bh, bHov ? 'parch' : 'wood');
+  txt('← VOLTAR [ESC]', bx + bw / 2, by + Math.round(24 * s), Math.round(8.5 * s), bHov ? MED.parchInk : MED.goldLight);
+  soulBackRect = { x: bx, y: by, w: bw, h: bh };
+}
+let menuDomBound = false;
+function bindMenuOverlayEvents() {
+  if (menuDomBound) return;
+  const ov = document.getElementById('menu-overlay');
+  if (!ov) return;
+  menuDomBound = true;
+  const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+  on('btn-play', () => { if (state === 'menu') startWithSelectedCharacter(); });
+  on('btn-events', () => {
+    if (state === 'menu') {
+      window.__EVENT_TEST_MODE = true;
+      startWithSelectedCharacter();
+    }
+  });
+  on('btn-chars', () => { if (state === 'menu') enterCharacterSelect(); });
+  on('btn-souls', () => { if (state === 'menu') { state = 'soul_shrine'; panelOpenAt = performance.now(); SFX.select(); } });
+  on('btn-bestiary', () => { if (state === 'menu') { state = 'bestiary'; panelOpenAt = performance.now(); if (SFX.bookOpen) SFX.bookOpen(); else SFX.select(); } });
+  on('ui-diff-desc', () => {
+    if (state !== 'menu') return;
+    difficultyIdx = (difficultyIdx + 1) % DIFFICULTY_MODES.length;
+    localStorage.setItem('gabriel_diff', difficultyIdx);
+    SFX.select();
+  });
+  ov.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (state !== 'menu') return;
+      difficultyIdx = Number(btn.dataset.diff) || 0;
+      localStorage.setItem('gabriel_diff', difficultyIdx);
+      SFX.select();
+    });
+  });
+}
+
+function syncMenuOverlay(isVisible) {
+  bindMenuOverlayEvents();
+  const ov = document.getElementById('menu-overlay');
+  if (!ov) return;
+  ov.classList.toggle('is-hidden', !isVisible);
+  if (!isVisible) return;
+
+  const curChar = CHARACTERS[selectedCharIndex];
+  const themeColor = curChar.id === 'amxral' ? '#4fe3ff' : (curChar.id === 'tuiuba' ? '#ff9d2e' : '#ffd23f');
+  const heroCard = document.getElementById('ui-hero-card');
+  if (heroCard) heroCard.style.setProperty('--hero-accent', themeColor);
+
+  const setTxt = (id, val) => { const el = document.getElementById(id); if (el && el.textContent !== val) el.textContent = val; };
+  setTxt('ui-hero-name', curChar.name.toUpperCase());
+  setTxt('ui-hero-title', curChar.title);
+  const weaponLabel = curChar.weaponType === 'orange' ? 'Laranjas Místicas' : (curChar.weaponType === 'star' ? 'Estrelas Cadentes' : 'Sabre de Luz');
+  setTxt('ui-hero-weapon', weaponLabel);
+  setTxt('ui-hero-hp', (curChar.hpMod || 6) + ' HP');
+  setTxt('ui-hero-spd', Math.round((curChar.speedMod || 1) * 100) + '%');
+  setTxt('ui-souls-count', soulEssences + (soulEssences === 1 ? ' ESSÊNCIA' : ' ESSÊNCIAS'));
+  const discovered = BESTIARY_ORDER.filter(k => (bestiaryKills[k] || 0) > 0).length;
+  setTxt('ui-bestiary-prog', discovered + ' / ' + BESTIARY_ORDER.length + ' descobertos');
+  setTxt('ui-best-score', best.toLocaleString('pt-BR'));
+  const dm = DIFFICULTY_MODES[difficultyIdx] || DIFFICULTY_MODES[0];
+  const diffEl = document.getElementById('ui-diff-desc');
+  if (diffEl) {
+    const diffText = 'MODO ' + dm.name + ' (' + dm.desc + ')';
+    if (diffEl.textContent !== diffText) diffEl.textContent = diffText;
+    diffEl.style.color = dm.col;
+  }
+  ov.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.classList.toggle('is-active', Number(btn.dataset.diff) === difficultyIdx);
+  });
+}
+
+function drawMenu() {
+  overlay(0.72);
+  const now = performance.now();
+  const t = now / 1000;
+  const isCompactH = H <= 540;
+  const s = clamp(Math.min(W / 1280, H / 720), 0.75, 1.4);
+  const gp = gamepadInfo.connected;
+  const curChar = CHARACTERS[selectedCharIndex];
+  const themeColor = curChar.weaponType === 'saber' ? '#ffd23f' : (curChar.weaponType === 'star' ? '#4fe3ff' : '#ff7a29');
+
+  // Limpa textos flutuantes remanescentes
+  if (texts.length > 0) texts = [];
+
+  // Motes de brasas místicas flutuando no ambiente
+  ctx.save();
+  for (let i = 0; i < 22; i++) {
+    const px = ((Math.sin(i * 127.1 + t * 0.3) * 0.5 + 0.5) * W);
+    const py = ((i * 41.3 - t * 18) % H + H) % H;
+    const sz = 1.5 + (i % 3);
+    const alpha = 0.2 + 0.25 * Math.sin(t * 3 + i);
+    ctx.fillStyle = i % 2 === 0 ? 'rgba(255, 210, 63, ' + alpha + ')' : 'rgba(255, 120, 40, ' + alpha + ')';
+    ctx.fillRect(px, py, sz, sz);
+  }
+  ctx.restore();
+
+  // Atualiza o Menu Overlay Moderno (HTML/CSS) e desenha apenas o pedestal/campeão no canvas
+  syncMenuOverlay(true);
+  const sCheck = clamp(Math.min(W / 1280, H / 720), 0.72, 1.35);
+  const charYOnly = Math.round(isCompactH ? H * 0.38 : H * 0.39);
+
+  // Pedestal 3D maior e majestoso
+  drawPedestal3D(W / 2, charYOnly, 66 * sCheck, 26 * sCheck, 18 * sCheck, 0.95, true, themeColor, now);
+
+  // Sprite do herói maior (1.75x)
+  const frOnly = curChar.anim.idle;
+  const bobOnly = Math.sin(t * 4) * 3 * sCheck;
+  ctx.save();
+  ctx.translate(W / 2, charYOnly - 6 * sCheck + bobOnly);
+  ctx.scale(1.75 * sCheck, 1.75 * sCheck);
+  shadow(0, 0, 22, 8, 0.5);
+  drawCharacterFrame(curChar, frOnly[Math.floor(t * 7) % frOnly.length], 0, 0, false);
+  ctx.restore();
+
+  // Hitbox e hover para clique direto no Campeão
+  const charBoxW = 150 * sCheck;
+  const charBoxH = 175 * sCheck;
+  menuCharRect = {
+    x: Math.round(W / 2 - charBoxW / 2),
+    y: Math.round(charYOnly - 110 * sCheck),
+    w: Math.round(charBoxW),
+    h: Math.round(charBoxH)
+  };
+  const isCharHov = inRect(mouse.x, mouse.y, menuCharRect);
+  if (canvas) canvas.style.cursor = isCharHov ? 'pointer' : 'default';
+
+  if (isCharHov) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 215, 100, 0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.ellipse(W / 2, charYOnly + 2 * sCheck, 72 * sCheck, 28 * sCheck, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Efeito de pulso de início do jogo
+  if (isStartingGame) {
+    const prog = clamp((now - gameStartAnimTime) / 320, 0, 1);
+    ctx.save();
+    ctx.strokeStyle = `rgba(255, 225, 120, ${1 - prog})`;
+    ctx.lineWidth = 3 + (1 - prog) * 5;
+    ctx.beginPath();
+    ctx.ellipse(W / 2, charYOnly, (70 + prog * 130) * sCheck, (28 + prog * 50) * sCheck, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  serifTxt(curChar.name.toUpperCase(), W / 2, charYOnly + 38 * sCheck, Math.round(15.5 * sCheck), '#f7d67e');
+  const weaponLabel = curChar.weaponType === 'orange' ? 'Laranjas Místicas' : (curChar.weaponType === 'star' ? 'Estrelas Cadentes' : 'Sabre de Luz');
+  uiTxt(curChar.title + '  •  ' + weaponLabel, W / 2, charYOnly + 54 * sCheck, Math.round(10.5 * sCheck), 'rgba(224, 185, 100, 0.85)');
+
+  const promptPulse = 0.55 + 0.35 * Math.sin(t * 3.5);
+  uiTxt('✦ Clique no Campeão para trocar [TAB] ✦', W / 2, charYOnly + 70 * sCheck, Math.round(9.5 * sCheck), isCharHov ? '#ffd875' : `rgba(217, 164, 65, ${promptPulse})`);
+
+  const playBtnEl = document.getElementById('btn-play');
+  if (playBtnEl) {
+    const r = playBtnEl.getBoundingClientRect();
+    menuPlayRect = { x: r.left, y: r.top, w: r.width, h: r.height };
+  } else {
+    menuPlayRect = { x: Math.round(W / 2 - 180 * sCheck), y: Math.round(charYOnly + 80 * sCheck), w: Math.round(360 * sCheck), h: Math.round(64 * sCheck) };
+  }
+  menuSoulRect = null; menuBestiaryRect = null; menuDiffRects = [];
+}
+
+// =====================================================================
+//  MENU DE PAUSA (v.2 — Game UI/UX Design System)
+// =====================================================================
+let pauseResumeRect = null, pauseCharRect = null, pauseRestartRect = null;
+let pauseGfxRect = null, pauseShakeRect = null, pausePerfRect = null;
+function drawPauseMenu() {
+  overlay(0.75);
+  const isCompactH = H <= 520;
+  const s = clamp(Math.min(W / 1280, H / 720), 0.75, 1.4);
+  const p = player;
+  const pw = Math.round(clamp(480 * s, 320, 540));
+  const ph = Math.round(clamp(394 * s, 305, 435));
+  const px = Math.round(W / 2 - pw / 2);
+  const py = Math.round(H / 2 - ph / 2);
+
+  medPanel(px, py, pw, ph, 'leather');
+
+  const titleY = py + Math.round(26 * s);
+  txt('⚔ JORNADA EM SUSPENSO ⚔', W / 2, titleY, Math.round(13 * s), MED.goldLight);
+
+  const statsY = titleY + Math.round(24 * s);
+  const curPrefix = p && p.prefix ? '[' + p.prefix.name + '] ' : '';
+  const weaponLabel = p && p.char.weaponType === 'orange' ? 'Laranjas' : (p && p.char.weaponType === 'star' ? 'Estrelas' : 'Sabre');
+  txt((p ? p.char.name.toUpperCase() : '') + ' • ' + curPrefix + weaponLabel, W / 2, statsY, Math.round(8.5 * s), MED.parch);
+
+  const infoY = statsY + Math.round(20 * s);
+  const seedLabel = (typeof runSeed !== 'undefined' && runSeed) ? '   •   SEED: #' + runSeed : '';
+  txt('ONDA: ' + toRoman(wave) + '   •   ABATES: ' + kills + '   •   OURO: ' + coins + seedLabel, W / 2, infoY, Math.round(7.2 * s), MED.gold);
+
+  // Linha divisória de ferro
+  ctx.fillStyle = 'rgba(217, 164, 65, 0.3)';
+  ctx.fillRect(px + 24, infoY + Math.round(14 * s), pw - 48, 1);
+
+  // Botões de Ação
+  const btnW = Math.round(pw - 56);
+  const btnH = Math.round(clamp(36 * s, 32, 42));
+  const btnGap = Math.round(10 * s);
+  const b0Y = infoY + Math.round(24 * s);
+
+  const r0 = { x: Math.round(W / 2 - btnW / 2), y: b0Y, w: btnW, h: btnH };
+  const r1 = { x: Math.round(W / 2 - btnW / 2), y: b0Y + btnH + btnGap, w: btnW, h: btnH };
+  const r2 = { x: Math.round(W / 2 - btnW / 2), y: b0Y + (btnH + btnGap) * 2, w: btnW, h: btnH };
+
+  const hov0 = inRect(mouse.x, mouse.y, r0);
+  const hov1 = inRect(mouse.x, mouse.y, r1);
+  const hov2 = inRect(mouse.x, mouse.y, r2);
+
+  medPanel(r0.x, r0.y, r0.w, r0.h, hov0 ? 'parch' : 'wood');
+  txt(gamepadInfo.connected ? '▶ RETOMAR BATALHA [START / A]' : '▶ RETOMAR BATALHA [ESC / ENTER]', W / 2, r0.y + Math.round(22 * s), Math.round(8.5 * s), hov0 ? MED.parchInk : MED.goldLight);
+
+  medPanel(r1.x, r1.y, r1.w, r1.h, hov1 ? 'parch' : 'wood');
+  txt(gamepadInfo.connected ? '✦ ESCOLHER CAMPEÃO [SELECT]' : '✦ ESCOLHER CAMPEÃO [TAB]', W / 2, r1.y + Math.round(22 * s), Math.round(8.5 * s), hov1 ? MED.parchInk : MED.parch);
+
+  medPanel(r2.x, r2.y, r2.w, r2.h, hov2 ? 'parch' : 'wood');
+  txt('↺ REINICIAR JORNADA [R]', W / 2, r2.y + Math.round(22 * s), Math.round(8.5 * s), hov2 ? MED.blood : '#c8b49e');
+
+  // Linha compacta de configurações WebGL/Acessibilidade/FPS
+  const optY = r2.y + btnH + btnGap;
+  const optH = Math.round(clamp(30 * s, 26, 36));
+  const optGap = Math.round(6 * s);
+  const optW = Math.floor((btnW - optGap * 2) / 3);
+  const rGfx = { x: r2.x, y: optY, w: optW, h: optH };
+  const rShake = { x: r2.x + optW + optGap, y: optY, w: optW, h: optH };
+  const rPerf = { x: r2.x + (optW + optGap) * 2, y: optY, w: btnW - (optW + optGap) * 2, h: optH };
+
+  const hovGfx = inRect(mouse.x, mouse.y, rGfx);
+  const hovShake = inRect(mouse.x, mouse.y, rShake);
+  const hovPerf = inRect(mouse.x, mouse.y, rPerf);
+
+  const qLbl = typeof getGfxBudget === 'function' ? getGfxBudget().label : 'ALTA';
+  const shakeOn = typeof GFX_SETTINGS !== 'undefined' && GFX_SETTINGS.reduceShake;
+  const perfOn = typeof GFX_SETTINGS !== 'undefined' && GFX_SETTINGS.showPerf;
+
+  medPanel(rGfx.x, rGfx.y, rGfx.w, rGfx.h, hovGfx ? 'parch' : 'wood');
+  txt(`⚡ ${qLbl} [G]`, rGfx.x + rGfx.w / 2, rGfx.y + Math.round(19 * s), Math.round(7.2 * s), hovGfx ? MED.parchInk : MED.goldLight);
+
+  medPanel(rShake.x, rShake.y, rShake.w, rShake.h, hovShake ? 'parch' : 'wood');
+  txt(`TREMOR: ${shakeOn ? 'SUAVE' : 'MAX'}`, rShake.x + rShake.w / 2, rShake.y + Math.round(19 * s), Math.round(7.0 * s), hovShake ? MED.parchInk : (shakeOn ? '#6ee7b7' : MED.parch));
+
+  medPanel(rPerf.x, rPerf.y, rPerf.w, rPerf.h, hovPerf ? 'parch' : 'wood');
+  txt(`FPS: ${perfOn ? 'ON' : 'OFF'} [F]`, rPerf.x + rPerf.w / 2, rPerf.y + Math.round(19 * s), Math.round(7.2 * s), hovPerf ? MED.parchInk : (perfOn ? '#6ee7b7' : '#c8b49e'));
+
+  pauseResumeRect = r0;
+  pauseCharRect = r1;
+  pauseRestartRect = r2;
+  pauseGfxRect = rGfx;
+  pauseShakeRect = rShake;
+  pausePerfRect = rPerf;
+}
+
+function drawOver() {
+  overlay(0.85);
+  const isCompactH = H <= 520;
+  const s = clamp(Math.min(W / 1280, H / 720), 0.75, 1.4);
+
+  const titleY = Math.round(isCompactH ? 26 : 42 * s);
+  txt('💀 TOMBOU EM COMBATE 💀', W / 2, titleY, Math.round(isCompactH ? 18 : 26 * s), MED.bloodLight);
+  txt('Sua bravura foi gravada nos anais da arena ancestral', W / 2, titleY + Math.round(20 * s), Math.round(7.5 * s), MED.parch);
+
+  const scrollW = Math.round(clamp(440 * s, 300, 480));
+  const scrollH = Math.round(clamp(285 * s, 230, 325));
+  const scrollX = Math.round(W / 2 - scrollW / 2);
+  const scrollY = Math.round(titleY + 34 * s);
+
+  medPanel(scrollX, scrollY, scrollW, scrollH, 'parch');
+
+  const rows = [
+    ['CAMPEÃO', player ? player.char.name.toUpperCase() : 'HERÓI'],
+    ['CAUSA DA QUEDA', (typeof lastDamageSource !== 'undefined' ? lastDamageSource : 'Horda').toUpperCase()],
+    ['GLÓRIA (PONTOS)', score],
+    ['ONDA RESISTIDA', toRoman(wave)],
+    ['NÍVEL ALCANÇADO', player ? player.level : 1],
+    ['INIMIGOS ABATIDOS', kills],
+    ['DANO TOTAL CAUSADO', totalDamageDealt],
+    ['MAIOR COMBO', maxCombo + 'x'],
+    ['SEED DA JORNADA', (typeof runSeed !== 'undefined' && runSeed ? '#' + runSeed : 'PADRÃO')],
+    ['TEMPO DE RESISTÊNCIA', `${Math.floor(playTime / 60)}m ${String(Math.floor(playTime % 60)).padStart(2, '0')}s`],
+  ];
+
+  const rowGap = Math.round(clamp(22 * s, 17, 26));
+  const startY = scrollY + Math.round(28 * s);
+  rows.forEach(([k, v], i) => {
+    inkTxt(k, scrollX + 24, startY + i * rowGap, Math.round(7.5 * s), '#5c3d1e', 'left');
+    inkTxt('' + v, scrollX + scrollW - 24, startY + i * rowGap, Math.round(8.5 * s), MED.parchInk, 'right');
+  });
+
+  const recY = scrollY + scrollH + Math.round(20 * s);
+  if (score >= best && score > 0) {
+    txt('👑 NOVO RECORDE ANCESTRAL ALCANÇADO! 👑', W / 2, recY, Math.round(10 * s), MED.goldLight);
+  } else {
+    txt('🏆 RECORDE ANCESTRAL: ' + best + ' PONTOS', W / 2, recY, Math.round(8.5 * s), MED.gold);
+  }
+
+  const promptY = Math.min(H - Math.round(20 * s), recY + Math.round(24 * s));
+  const pulseCol = Math.floor(time * 3) % 2 === 0 ? MED.goldLight : '#ffffff';
+  txt(touch.active ? 'TOQUE NA TELA PARA RENASCER' : '⚔ PRESSIONE ENTER OU CLIQUE PARA RENASCER ⚔', W / 2, promptY, Math.round(9.5 * s), pulseCol);
+}
+
+// =====================================================================
+//  LOOP PRINCIPAL
+// =====================================================================
+function inRect(mx, my, r) { return r && mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h; }
+

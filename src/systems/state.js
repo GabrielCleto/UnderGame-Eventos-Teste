@@ -1,0 +1,172 @@
+// =====================================================================
+//  ESTADO GLOBAL
+// =====================================================================
+let state = 'loading'; // loading | menu | select_char | play | levelup | shop | pause | over
+let player, stats, ups, enemies, ebullets, pshots, particles, pickups, texts, slashes, bolts;
+let shrines = [], hazards = [], fxRings = [], afterimages = [], puddles = [];
+let shake, freeze, wave, waveTimer, toSpawn, spawnTimer, score, coins, kills, banner, time, playTime;
+let trauma = 0.0;
+function addTrauma(amt) { trauma = Math.min(1.0, trauma + amt); shake = Math.max(shake, amt * 8); }
+let waveEvent = null, meteorTimer = 0, minimapOn = true;
+let levelChoices, levelSel, boss, bossCount;
+let best = +localStorage.getItem('gabriel_best2') || 0;
+let soulEssences = +localStorage.getItem('gabriel_essences') || 0;
+let soulUps = JSON.parse(localStorage.getItem('gabriel_soul_ups') || '{"vigor":0,"fury":0,"revive":0}');
+const BIOMES = [
+  { name: 'FLORESTA ANCESTRAL', edge: 'rgba(3, 7, 16, 0.60)', tint: null },
+  { name: 'CIDADELA DE MAGMA', edge: 'rgba(72, 16, 2, 0.68)', tint: 'rgba(255, 65, 15, 0.08)' },
+  { name: 'ABISMO DO VAZIO', edge: 'rgba(32, 4, 62, 0.72)', tint: 'rgba(130, 35, 220, 0.09)' },
+  { name: 'CREPÚSCULO SOMBRIO', edge: 'rgba(10, 26, 38, 0.68)', tint: 'rgba(30, 140, 180, 0.07)' },
+];
+const DIFFICULTY_MODES = [
+  { id: 0, name: 'NORMAL', hpMul: 1, spdMul: 1, spawnMul: 1, scoreMul: 1, col: '#7aff61', desc: 'Equilíbrio Clássico' },
+  { id: 1, name: 'DIFÍCIL', hpMul: 1.45, spdMul: 1.15, spawnMul: 1.25, scoreMul: 1.5, col: '#ffaa2b', desc: '+45% Vida • +50% Pts' },
+  { id: 2, name: 'PESADELO', hpMul: 2.1, spdMul: 1.3, spawnMul: 1.5, scoreMul: 2.25, col: '#ff4268', desc: '2.1x Vida • +125% Pts' },
+];
+const savedDiff = localStorage.getItem('gabriel_diff');
+let difficultyIdx = savedDiff !== null ? clamp(+savedDiff, 0, 2) : 2; // Modo Pesadelo como padrão
+let panelOpenAt = 0;
+let currentBiome = 0;
+let shopVisitedWave = 0;
+let rerollsUsed = 0;
+let bansLeft = 1;
+let bannedUpgrades = new Set();
+let totalDamageDealt = 0;
+let maxCombo = 0;
+let bestiaryKills = JSON.parse(localStorage.getItem('gabriel_bestiary') || '{}');
+
+let runSeed = '';
+let lastDamageSource = 'Horda da Arena';
+
+// =====================================================================
+//  SISTEMA DE SAVE VERSIONADO & MIGRAÇÃO (save-systems + roguelike skills)
+//  Separa Perfil Persistente (meta-progressão) do Estado da Run
+// =====================================================================
+const SAVE_VERSION = 2;
+const PROFILE_KEY = 'underground_profile_v2';
+
+function saveProfile() {
+  try {
+    const data = {
+      version: SAVE_VERSION,
+      best,
+      soulEssences,
+      soulUps,
+      difficultyIdx,
+      selectedCharIndex: typeof selectedCharIndex !== 'undefined' ? selectedCharIndex : 0,
+      saberColorIndex: typeof saberColorIndex !== 'undefined' ? saberColorIndex : 0,
+      bestiaryKills,
+      updatedAt: Date.now()
+    };
+    const prev = localStorage.getItem(PROFILE_KEY);
+    if (prev) localStorage.setItem(PROFILE_KEY + '_bak', prev);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(data));
+    // Mantém sincronia retrocompatível com as chaves legadas
+    localStorage.setItem('gabriel_best2', best);
+    localStorage.setItem('gabriel_essences', soulEssences);
+    localStorage.setItem('gabriel_soul_ups', JSON.stringify(soulUps));
+    localStorage.setItem('gabriel_diff', difficultyIdx);
+    localStorage.setItem('gabriel_bestiary', JSON.stringify(bestiaryKills));
+  } catch (e) {}
+}
+
+function loadProfile() {
+  try {
+    let raw = localStorage.getItem(PROFILE_KEY) || localStorage.getItem(PROFILE_KEY + '_bak');
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d && typeof d === 'object') {
+        best = Math.max(best, +d.best || 0);
+        soulEssences = Math.max(soulEssences, +d.soulEssences || 0);
+        if (d.soulUps && typeof d.soulUps === 'object') soulUps = { vigor: 0, fury: 0, revive: 0, ...d.soulUps };
+        if (typeof d.difficultyIdx === 'number') difficultyIdx = clamp(d.difficultyIdx, 0, 2);
+        if (typeof d.selectedCharIndex === 'number' && typeof selectedCharIndex !== 'undefined') {
+          selectedCharIndex = clamp(d.selectedCharIndex, 0, CHARACTERS.length - 1);
+        }
+        if (typeof d.saberColorIndex === 'number' && typeof saberColorIndex !== 'undefined') {
+          saberColorIndex = clamp(d.saberColorIndex, 0, SABER_COLORS.length - 1);
+        }
+        if (d.bestiaryKills && typeof d.bestiaryKills === 'object') {
+          bestiaryKills = { ...bestiaryKills, ...d.bestiaryKills };
+        }
+        return;
+      }
+    }
+    // Migração v1 (chaves soltas) -> v2 (perfil unificado)
+    saveProfile();
+  } catch (e) {}
+}
+loadProfile();
+
+// Save com debounce: agrupa varias mudancas numa unica escrita a cada 3s
+let _saveTimer = null;
+function saveProfileSoon() {
+  if (_saveTimer) return;
+  _saveTimer = setTimeout(() => { _saveTimer = null; saveProfile(); }, 3000);
+}
+function flushProfileSave() {
+  if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; saveProfile(); }
+}
+
+function generateRunSeed() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let out = '';
+  for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
+function reset() {
+  keys[' '] = false;
+  if (typeof stopBossMusic === 'function') stopBossMusic(false);
+  if (typeof actionBuffer !== 'undefined') actionBuffer.clear();
+  if (typeof GPU_FX !== 'undefined') GPU_FX.reset();
+  runSeed = generateRunSeed();
+  lastDamageSource = 'Horda da Arena';
+  buildWorld();
+  if (typeof rebuildPixiWorld === 'function') rebuildPixiWorld();
+  const curChar = CHARACTERS[selectedCharIndex];
+  const vigorBonus = (soulUps.vigor || 0) * 2;
+  const furyBonus = (soulUps.fury || 0) * 0.15;
+  stats = {
+    dmg: curChar.dmgMod, atkRate: 1, speed: 220 * curChar.speedMod, maxHp: curChar.hpMod + vigorBonus, range: 1,
+    furyMul: 1 + furyBonus, coinMul: 1 + (soulUps.fury || 0) * 0.1,
+    revivesLeft: (soulUps.revive || 0) > 0 ? 1 : 0,
+    dashCd: 0.95, dashDmg: 2, crit: 0.08, magnet: 110, wave: 0, fire: 0, bolt: 0, ice: 0,
+    earth: 0, phantom: 0, multi: 0, axe: 0, aegis: 0, critNova: 0,
+    vortex: 0, venom: 0, berserk: 0, ricochet: 0, armor: 0,
+    luck: 0, vamp: 0, invTime: 1.0, nukeNext: false
+  };
+  ups = {};
+  shopBuys = {};
+  player = {
+    char: curChar,
+    x: WORLD.w / 2, y: WORLD.h / 2, dir: 'down', flip: false, moving: false, aim: Math.PI / 2,
+    hp: curChar.hpMod + vigorBonus, inv: 0, animT: 0, idleT: 0, attack: null, attackCd: 0, dash: null, dashCd: 0,
+    ult: null, ultMeter: 0, combo: 0, comboT: 0, bestStreakMilestone: 0, feverTier: 0,
+    synergies: new Set(), multiKillCnt: 0, multiKillT: 0, lastEssenceKillMilestone: 0, bladeTrail: [], solarBoltT: 0.85,
+    level: 1, xp: 0, xpNext: 6, pendingLevels: 0,
+    fireAng: 0, boltT: 2, iceT: 0, earthT: 3, phantomT: 1.5, axeT: 1.4, aegisT: 12, vortexT: 3.5,
+    frenzyT: 0, shields: 0, ghostT: 0, stepT: 0, goblinT: 16, prefix: null, ironskinT: 0, thornsT: 0, starTimer: 5.0,
+  };
+  enemies = []; ebullets = []; pshots = []; particles = []; pickups = []; texts = []; slashes = []; bolts = [];
+  shrines = []; hazards = []; fxRings = []; afterimages = []; puddles = [];
+  waveEvent = 'noir'; meteorTimer = 0;
+  cam = { x: player.x, y: player.y, zoom: getCamZoom(), zoomDyn: 1, lookX: 0, lookY: 0 }; shake = 0; freeze = 0; trauma = 0;
+  currentBiome = 0; shopVisitedWave = 0; rerollsUsed = 0; bansLeft = 1; bannedUpgrades = new Set(); totalDamageDealt = 0; maxCombo = 0;
+  wave = 1; waveTimer = 0; toSpawn = 24; spawnTimer = 0.1; boss = null; bossCount = 0;
+  score = 0; coins = 0; kills = 0;
+  banner = { txt: '🎬 CIDADE NOIR', sub: 'PRETO & BRANCO + JAZZ • CLIQUE P/ SOM • TECLAS 1-6 TROCAM', life: 5.5, maxT: 5.5 };
+  time = 0; playTime = 0;
+  hudGhostHp = player.hp; hudGhostXp = 0;
+  if (typeof applyEventMapMutation === 'function') {
+    try { applyEventMapMutation('noir'); } catch (_) {}
+  }
+  if (typeof playEventMusic === 'function') {
+    try { playEventMusic('noir'); } catch (_) {}
+  }
+  if (typeof window !== 'undefined' && window.updateEventTesterBarUI) {
+    try { window.updateEventTesterBarUI(); } catch (_) {}
+  }
+  refillBarrels(15);
+}
+

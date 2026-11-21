@@ -1,0 +1,130 @@
+// =====================================================================
+//  ASSETS & IMAGENS (Carregador Otimizado)
+// =====================================================================
+const IMG = {}, WHITE = {};
+const IMAGE_LIST = {
+  // Personagens & Retratos
+  player_manguinha: 'assets/sprites/characters/personagem_transparente.png',
+  player_amxral: 'assets/sprites/characters/amxral_transparente.png',
+  player_tuiuba: 'assets/sprites/characters/tuiuba_transparente.png',
+  portrait_manguinha: 'assets/sprites/characters/manguinha_portrait.png',
+  portrait_amxral: 'assets/sprites/characters/amxral_portrait.png',
+  portrait_tuiuba: 'assets/sprites/characters/tuiuba_portrait.png',
+  manguinha_atk: 'assets/sprites/characters/manguinha_attack_strip.png',
+
+  // Projéteis Especiais
+  terraria_star: 'assets/icons/terraria_star.png',
+  orange_ball: 'assets/icons/orange_pure.png',
+  orange_splash: 'assets/icons/orange_splash.png',
+
+  // Mundo & Cenário
+  grass: 'assets/sprites/world/grass.png',
+  grassalt: 'assets/sprites/world/grassalt.png',
+  dirt: 'assets/sprites/world/dirt.png',
+  water: 'assets/sprites/world/water.png',
+  treetop: 'assets/sprites/world/treetop.png',
+  trunk: 'assets/sprites/world/trunk.png',
+  rock: 'assets/sprites/world/rock.png',
+  barrel: 'assets/sprites/world/barrel.png',
+  altar_frenzy: 'assets/sprites/world/altar_frenzy.png',
+  altar_shield: 'assets/sprites/world/altar_shield.png',
+  altar_fortune: 'assets/sprites/world/altar_fortune.png',
+  altar_storm: 'assets/sprites/world/altar_storm.png',
+  altar_pact: 'assets/sprites/world/altar_pact.png',
+  altar_cursed: 'assets/sprites/world/altar_cursed.png',
+  void_totem: 'assets/sprites/world/void_totem.png',
+  ruin_pillar: 'assets/sprites/world/ruin_pillar.png',
+  crystal_geode: 'assets/sprites/world/crystal_geode.png',
+  hero_statue: 'assets/sprites/world/hero_statue.png',
+  magic_mushroom: 'assets/sprites/world/magic_mushroom.png',
+  void_rift: 'assets/sprites/world/void_rift.png',
+  noir_lamp: 'assets/sprites/world/noir_lamp.png',
+  blood_obelisk: 'assets/sprites/world/blood_obelisk.png',
+  ice_spire: 'assets/sprites/world/ice_spire.png',
+  solar_monolith: 'assets/sprites/world/solar_monolith.png',
+};
+
+const MONSTER_SPRITES = [
+  'slime', 'bat', 'bee', 'snake', 'small_worm', 'eyeball', 'ghost',
+  'big_worm', 'man_eater_flower', 'pumpking',
+  'chaos_imp', 'void_spider', 'boss_void_overlord', 'boss_magma_colossus',
+  'twilight_lich', 'aether_slider', 'carminite_ghast',
+  'goblin', 'necromancer', 'golem', 'sniper', 'viper', 'bomber',
+  'necro_boss', 'hydra_boss', 'beholder_boss'
+];
+MONSTER_SPRITES.forEach(m => {
+  IMAGE_LIST['m_' + m] = `assets/sprites/monsters/${m}.png`;
+});
+
+[
+  'I_GoldCoin', 'I_Sapphire', 'I_Ruby', 'P_Red01', 'P_Red02', 'A_Shoes03', 'Ac_Ring01', 'I_Clock', 'I_Clover', 'S_Buff04',
+  'S_Buff08', 'S_Fire01', 'S_Fire02', 'S_Ice01', 'S_Holy01', 'S_Light01', 'S_Light02', 'S_Light03', 'S_Light04', 'S_Magic02',
+  'I_Chest01', 'A_Armour01', 'I_Diamond', 'heart_full', 'heart_empty', 'S_Dagger03', 'S_Earth01', 'S_Axe03', 'I_Book',
+  'Ac_Medal01', 'S_Buff01', 'S_Buff03', 'S_Magic03', 'S_Magic04', 'P_Medicine01',
+  'mod_gauntlet', 'mod_gem_power', 'mod_gem_time', 'mod_blood_orb', 'mod_air_sigil', 'mod_charm', 'mod_carminite', 'mod_ambrosium'
+].forEach(i => (IMAGE_LIST['i_' + i] = `assets/icons/${i}.png`));
+
+function makeWhite(img) {
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d');
+  g.drawImage(img, 0, 0);
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = '#fff';
+  g.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+
+let loaded = 0, total = Object.keys(IMAGE_LIST).length, ready = false;
+const loadPromises = Object.entries(IMAGE_LIST).map(([k, src]) => new Promise(res => {
+  const im = new Image();
+  im.onload = () => { IMG[k] = im; loaded++; res(); };
+  im.onerror = () => { console.warn('Falha ao carregar imagem:', src); loaded++; res(); };
+  im.src = src;
+}));
+function onAssetsReady() {
+  for (const k in IMG) {
+    if (k.startsWith('player_') || k.startsWith('m_')) {
+      WHITE[k] = makeWhite(IMG[k]);
+    }
+  }
+  // Alias sem prefixo m_ para compatibilidade direta e zero duplicação de memória
+  MONSTER_SPRITES.forEach(m => {
+    IMG[m] = IMG['m_' + m];
+    WHITE[m] = WHITE['m_' + m];
+  });
+
+  if (typeof buildWorld === 'function') {
+    try {
+      buildWorld();
+    } catch (e) {
+      console.warn('Erro em buildWorld:', e);
+    }
+  }
+
+  if (typeof initPixiRenderer === 'function') {
+    try {
+      initPixiRenderer();
+      if (typeof usePixi !== 'undefined' && usePixi && typeof buildPixiWorld === 'function') {
+        buildPixiWorld();
+      }
+    } catch (e) {
+      console.warn('Fallback PixiJS para Canvas 2D:', e);
+      if (typeof usePixi !== 'undefined') usePixi = false;
+    }
+  }
+  ready = true;
+}
+
+Promise.all([...loadPromises, document.fonts ? document.fonts.load('16px "Press Start 2P"').catch(() => { }) : null])
+  .then(() => {
+    if (document.readyState === 'loading') {
+      window.addEventListener('DOMContentLoaded', onAssetsReady);
+    } else {
+      onAssetsReady();
+    }
+  })
+  .catch((err) => {
+    console.error('Falha no carregamento de recursos:', err);
+    ready = true; // Garante que nunca trave a tela de carregamento
+  });
